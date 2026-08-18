@@ -1,7 +1,7 @@
 -- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
 -- Put your paste id OR any raw URL on the next line (page URL is fine; this rewrites it).
 
-local url = "https://pastebin.com/HWWaz6ce"
+local url = "https://pastebin.com/tTrQYYaj"
 
 local UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -151,6 +151,12 @@ if not src then
 end
 
 print("GameAnalysisAI: got Lua from " .. used .. " (" .. tostring(#src) .. " bytes)")
+
+-- Old pastes used `then = true` as a table key. `then` is a Lua keyword, so loadstring dies at that line.
+if string.find(src, "then = true", 1, true) then
+	src = string.gsub(src, "([,{%s])then%s*=", '%1["then"] =')
+	print("GameAnalysisAI: patched old paste (then = true)")
+end
 
 local compile = loadstring or load
 if type(compile) ~= "function" then
