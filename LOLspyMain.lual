@@ -1,7 +1,7 @@
 -- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
 -- Put your paste id OR any raw URL on the next line (page URL is fine; this rewrites it).
 
-local url = "https://pastebin.com/Ttdse5sK"
+local url = "https://pastebin.com/VpNYsbUr"
 
 local UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
