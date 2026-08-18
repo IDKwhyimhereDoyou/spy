@@ -1,7 +1,9 @@
--- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
--- Put your paste id OR any raw URL on the next line (page URL is fine; this rewrites it).
+-- ONE script to Execute.
+-- Pastebin Private pastes cannot be fetched (no login). If Pastebin forces Private,
+-- upload GameAnalysisAI.lua as a GitHub Secret Gist instead, then put the Gist URL below.
+-- Page URL or raw URL both work.
 
-local url = "https://pastebin.com/btsJWumc"
+local url = "https://gist.github.com/IDKwhyimhereDoyou/6fe07e2d99254bc68453ae057fc57b4e"
 
 local UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -24,6 +26,9 @@ local function looksLikeHtml(s)
 		return true
 	end
 	if string.find(t, "just a moment", 1, true) then
+		return true
+	end
+	if string.find(t, "sign in", 1, true) and string.find(t, "pastebin", 1, true) then
 		return true
 	end
 	return false
@@ -105,6 +110,9 @@ end
 local function pasteIdFrom(u)
 	u = tostring(u or "")
 	u = string.gsub(u, "%s+", "")
+	if string.find(u, "gist.", 1, true) or string.find(u, "github", 1, true) then
+		return nil
+	end
 	return string.match(u, "pastebin%.com/raw%.php%?i=([%w]+)")
 		or string.match(u, "pastebin%.com/raw/([%w]+)")
 		or string.match(u, "pastebin%.com/dl/([%w]+)")
@@ -112,13 +120,33 @@ local function pasteIdFrom(u)
 		or string.match(u, "^([%w]+)$")
 end
 
-if string.find(tostring(url), "YOURID", 1, true) then
-	error("Replace YOURID with your Pastebin id. Example: https://pastebin.com/raw/AbCd1234")
+local function gistRawFrom(u)
+	u = tostring(u or "")
+	u = string.gsub(u, "%s+", "")
+	u = string.gsub(u, "/%?.*$", "")
+	if string.find(u, "gist.githubusercontent.com", 1, true) then
+		if not string.find(u, "/raw", 1, true) then
+			return u .. "/raw"
+		end
+		return u
+	end
+	local user, id = string.match(u, "gist%.github%.com/([%w%-_]+)/([%w]+)")
+	if user and id then
+		return "https://gist.githubusercontent.com/" .. user .. "/" .. id .. "/raw"
+	end
+	return nil
+end
+
+if string.find(tostring(url), "YOURUSER", 1, true) or string.find(tostring(url), "YOURID", 1, true) or string.find(tostring(url), "YOURGISTID", 1, true) then
+	error("Pastebin Private will not load. Create a GitHub Secret Gist of GameAnalysisAI.lua, then put that Gist URL here. Example: https://gist.github.com/yourname/abc123")
 end
 
 local candidates = {}
+local gistRaw = gistRawFrom(url)
 local id = pasteIdFrom(url)
-if id then
+if gistRaw then
+	candidates = { gistRaw, url }
+elseif id then
 	candidates = {
 		"https://pastebin.com/raw/" .. id,
 		"https://pastebin.com/raw.php?i=" .. id,
@@ -128,7 +156,7 @@ else
 	candidates = { url }
 end
 
-print("GameAnalysisAI: fetching paste...")
+print("GameAnalysisAI: fetching script...")
 
 local src, used, lastPreview
 for i = 1, #candidates do
@@ -147,15 +175,21 @@ end
 
 if not src then
 	warn("Preview of what came back: " .. tostring(lastPreview))
-	error("Pastebin sent a webpage (block/captcha), not Lua. In a browser open the RAW link and confirm it starts with -- Game Analysis AI. If the browser shows Lua but this still fails, Pastebin is blocking the executor — paste GameAnalysisAI.lua itself instead.")
+	if id then
+		error("Pastebin did not return Lua. Private pastes cannot be fetched. Upload GameAnalysisAI.lua as a GitHub Secret Gist and put that URL in this loader.")
+	end
+	error("Did not get Lua from that URL. Open it in a browser and confirm it starts with -- Game Analysis AI, then use the RAW link.")
 end
 
 print("GameAnalysisAI: got Lua from " .. used .. " (" .. tostring(#src) .. " bytes)")
 
--- Old pastes used `then = true` as a table key. `then` is a Lua keyword, so loadstring dies at that line.
 if string.find(src, "then = true", 1, true) then
 	src = string.gsub(src, "([,{%s])then%s*=", '%1["then"] =')
 	print("GameAnalysisAI: patched old paste (then = true)")
+end
+if string.find(src, "end = {", 1, true) then
+	src = string.gsub(src, "([,{%s])end%s*=%s*%{", '%1["end"] = {')
+	print("GameAnalysisAI: patched old paste (end = {)")
 end
 
 local compile = loadstring or load
@@ -167,14 +201,12 @@ local fn, err = compile(src)
 if not fn then
 	err = tostring(err)
 	if string.find(err, "local registers", 1, true) or string.find(err, "exceeded limit 200", 1, true) then
-		error("Old paste. Re-upload the NEW GameAnalysisAI.lua from Documents, then run this loader again. (" .. err .. ")")
+		error("Old file. Re-upload the NEW GameAnalysisAI.lua, then run this loader again. (" .. err .. ")")
 	end
-	error("Paste is not valid Lua: " .. err)
+	error("Downloaded file is not valid Lua: " .. err)
 end
 
-
-
-
-sk-proj-q1WMO_bPbAdBUuMVS0FOK83cRMytimWA7CNB-zEIX2LdLKKPw_DkV9aNd3FWXuNQ-lrNjVNsNyT3BlbkFJA7tvDbXFO5nww2jPvOcpO1lX6WnPjdtOWyHjX7rLDZk39p3vl
-
 fn()
+
+
+--sk-proj-q1WMO_bPbAdBUuMVS0FOK83cRMytimWA7CNB-zEIX2LdLKKPw_DkV9aNd3FWXuNQ-lrNjVNsNyT3BlbkFJA7tvDbXFO5nww2jPvOcpO1lX6WnPjdtOWyHjX7rLDZk39p3vl
