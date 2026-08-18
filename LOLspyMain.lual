@@ -19,7 +19,7 @@ while not player do
 	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 	player = Players.LocalPlayer
 end
-local playerGui = player:WaitForChild("PlayerGui", 30) or player:FindFirstChild("PlayerGui")
+local playerGui = player:FindFirstChildOfClass("PlayerGui") or player:FindFirstChild("PlayerGui")
 
 local CONFIG = {
 	WINDOW_SIZE = UDim2.new(0, 1140, 0, 620),
@@ -2097,19 +2097,24 @@ local function httpRequest(opts)
 end
 
 local function parentScreenGui(gui)
-	gui.ResetOnSpawn = false
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = 1000
-	for _, name in ipairs({ "gethui", "gethiddenui", "get_hidden_gui", "gethiddenhui" }) do
-		local gethui = safeGlobal(name)
-		if type(gethui) == "function" then
-			local ok, hui = pcall(gethui)
-			if ok and hui then
-				gui.Parent = hui
-				return
-			end
+	pcall(function()
+		gui.ResetOnSpawn = false
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		gui.IgnoreGuiInset = true
+		gui.DisplayOrder = 2147483647
+		gui.Enabled = true
+	end)
+	local function tryParent(target)
+		if not target then
+			return false
 		end
+		local ok = pcall(function()
+			gui.Parent = target
+		end)
+		return ok and gui.Parent ~= nil
+	end
+	if not playerGui then
+		playerGui = player:FindFirstChildOfClass("PlayerGui") or player:FindFirstChild("PlayerGui")
 	end
 	local syn = safeGlobal("syn")
 	if type(syn) == "table" and type(syn.protect_gui) == "function" then
@@ -2119,25 +2124,41 @@ local function parentScreenGui(gui)
 	if type(hid) == "function" then
 		pcall(hid, gui)
 	end
-	local okCore = pcall(function()
-		local coreGui = game:GetService("CoreGui")
+	for _, name in ipairs({ "gethui", "gethiddenui", "get_hidden_gui", "gethiddenhui" }) do
+		local gethui = safeGlobal(name)
+		if type(gethui) == "function" then
+			local ok, hui = pcall(gethui)
+			if ok and tryParent(hui) then
+				return true
+			end
+		end
+	end
+	local coreGui
+	pcall(function()
+		coreGui = game:GetService("CoreGui")
 		local cloneref = safeGlobal("cloneref")
 		if type(cloneref) == "function" then
 			coreGui = cloneref(coreGui)
 		end
-		gui.Parent = coreGui
 	end)
-	if not okCore then
-		if not playerGui then
-			playerGui = player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 10)
-		end
-		if playerGui then
-			gui.Parent = playerGui
-		end
+	if tryParent(coreGui) then
+		return true
 	end
-	if not gui.Parent then
+	if tryParent(playerGui) then
+		return true
+	end
+	local t0 = tick()
+	while tick() - t0 < 6 do
+		playerGui = player:FindFirstChildOfClass("PlayerGui") or player:FindFirstChild("PlayerGui")
+		if tryParent(playerGui) then
+			return true
+		end
+		task.wait(0.15)
+	end
+	pcall(function()
 		warn("GameAnalysisAI: could not parent the window (no gethui/CoreGui/PlayerGui).")
-	end
+	end)
+	return false
 end
 
 local function getSavedApiKey()
@@ -7440,6 +7461,8 @@ local function createApiKeyGate()
 	apiKeyGate.BackgroundColor3 = CONFIG.THEME.BACKGROUND
 	apiKeyGate.BorderSizePixel = 0
 	apiKeyGate.ZIndex = 20
+	apiKeyGate.Visible = true
+	apiKeyGate.Active = true
 	apiKeyGate.Parent = screenGui
 	addCorner(apiKeyGate, 14)
 	addStroke(apiKeyGate, 1, 0.35)
@@ -9074,9 +9097,16 @@ local function createUI()
 	toolsMinimized = CONFIG.SIDEBAR_FOLDED and true or false
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "GameAnalysisAI"
-	parentScreenGui(screenGui)
+	screenGui.ResetOnSpawn = false
+	screenGui.IgnoreGuiInset = true
+	screenGui.Enabled = true
+	screenGui.DisplayOrder = 2147483647
+	local parented = parentScreenGui(screenGui)
 	createApiKeyGate()
 	createMainUI()
+	if not parented and screenGui and not screenGui.Parent then
+		error("Could not parent the GUI (no gethui, CoreGui, or PlayerGui).")
+	end
 	applyUiScale()
 	if themeLook(CONFIG.THEME_NAME) then
 		applyLookStyle(CONFIG.THEME_NAME)
@@ -10773,8 +10803,50 @@ local function connectEvents()
 	end)
 end
 
-createUI()
-connectEvents()
+local function showBootError(err)
+	local text = "Game Analysis AI failed to start:\n" .. tostring(err)
+	pcall(function()
+		warn(text)
+		print(text)
+	end)
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "GameAnalysisAI_Error"
+	pcall(function()
+		sg.ResetOnSpawn = false
+		sg.IgnoreGuiInset = true
+		sg.DisplayOrder = 2147483647
+		sg.Enabled = true
+	end)
+	parentScreenGui(sg)
+	local box = Instance.new("TextLabel")
+	box.Size = UDim2.new(0, 520, 0, 180)
+	box.Position = UDim2.new(0.5, -260, 0.5, -90)
+	box.BackgroundColor3 = Color3.fromRGB(28, 18, 22)
+	box.TextColor3 = Color3.fromRGB(255, 196, 196)
+	box.Font = Enum.Font.SourceSans
+	box.TextSize = 18
+	box.TextWrapped = true
+	box.Text = text
+	box.Parent = sg
+	pcall(function()
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 10)
+		c.Parent = box
+	end)
+end
+
+local bootOk, bootErr = pcall(createUI)
+if not bootOk then
+	showBootError(bootErr)
+else
+	local evOk, evErr = pcall(connectEvents)
+	if not evOk then
+		showBootError(evErr)
+	end
+	pcall(function()
+		print("GameAnalysisAI: loaded. You should see the API key window.")
+	end)
+end
 
 task.spawn(function()
 	while screenGui and screenGui.Parent do
@@ -10785,19 +10857,19 @@ task.spawn(function()
 	end
 end)
 
-if not getHttpRequest() then
-	gateStatusLabel.Text = "This executor has no request() — chat will fail in-game. Need request, http_request, or syn.request."
-	gateStatusLabel.TextColor3 = CONFIG.THEME.WARNING
-end
-
-local savedKey = getSavedApiKey()
-if savedKey then
-	gateKeyInput.Text = savedKey
-	if getHttpRequest() then
-		gateStatusLabel.Text = "Key found in executor env (GAI_API_KEY). Click Continue."
-		gateStatusLabel.TextColor3 = CONFIG.THEME.SUCCESS
+if bootOk and gateStatusLabel then
+	if not getHttpRequest() then
+		gateStatusLabel.Text = "This executor has no request() — chat will fail in-game. Need request, http_request, or syn.request."
+		gateStatusLabel.TextColor3 = CONFIG.THEME.WARNING
+	end
+	local savedKey = getSavedApiKey()
+	if savedKey and gateKeyInput then
+		gateKeyInput.Text = savedKey
+		if getHttpRequest() then
+			gateStatusLabel.Text = "Key found in executor env (GAI_API_KEY). Click Continue."
+			gateStatusLabel.TextColor3 = CONFIG.THEME.SUCCESS
+		end
 	end
 end
-
 
 sk-proj-dVAULJvSezkx2eWYjgmr8HKVG5pmyfFwWHOxGPj7AUWEtFMFgGHqIR5Pfqk4g4mDdZWY1pPRZqT3BlbkFJcbj4ekmoAyDUH0-8LnH_Mo79_qDxm-qmTKxb3Ki0-
