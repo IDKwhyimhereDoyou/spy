@@ -1,54 +1,165 @@
 -- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
--- Replace YOURID with the paste id (the bit after pastebin.com/).
-local url = "https://pastebin.com/z4F3Cw5E"
-local function httpGet(u)
+-- Put your paste id OR any raw URL on the next line (page URL is fine; this rewrites it).
+
+local url = "https://pastebin.com/UCcHDEBk"
+
+local UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+local function looksLikeHtml(s)
+	if type(s) ~= "string" then
+		return true
+	end
+	local t = string.gsub(s, "^%s+", "")
+	t = string.sub(string.lower(t), 1, 800)
+	if string.sub(t, 1, 1) == "<" then
+		return true
+	end
+	if string.find(t, "<!doctype", 1, true) then
+		return true
+	end
+	if string.find(t, "<html", 1, true) then
+		return true
+	end
+	if string.find(t, "<head", 1, true) then
+		return true
+	end
+	if string.find(t, "just a moment", 1, true) then
+		return true
+	end
+	return false
+end
+
+local function looksLikeLua(s)
+	if type(s) ~= "string" or #s < 40 then
+		return false
+	end
+	if looksLikeHtml(s) then
+		return false
+	end
+	local t = string.gsub(s, "^%s+", "")
+	if string.sub(t, 1, 2) == "--" then
+		return true
+	end
+	if string.sub(t, 1, 5) == "local" then
+		return true
+	end
+	if string.sub(t, 1, 5) == "pcall" then
+		return true
+	end
+	if string.find(t, "Game Analysis AI", 1, true) then
+		return true
+	end
+	return false
+end
+
+local function getRequest()
+	return (syn and syn.request)
+		or (http and http.request)
+		or http_request
+		or (fluxus and fluxus.request)
+		or (krnl and krnl.request)
+		or request
+end
+
+local function tryGet(u)
+	local req = getRequest()
+	if type(req) == "function" then
+		local ok, res = pcall(req, {
+			Url = u,
+			Method = "GET",
+			Headers = {
+				["User-Agent"] = UA,
+				["Accept"] = "text/plain,*/*",
+			},
+		})
+		if ok then
+			if type(res) == "string" then
+				return res
+			end
+			if type(res) == "table" then
+				return res.Body or res.body
+			end
+		end
+	end
 	local ok, body = pcall(function()
 		return game:HttpGet(u)
 	end)
-	if ok and type(body) == "string" and #body > 50 then
+	if ok and type(body) == "string" then
+		return body
+	end
+	ok, body = pcall(function()
+		return game:HttpGet(u, true)
+	end)
+	if ok and type(body) == "string" then
 		return body
 	end
 	ok, body = pcall(function()
 		return game:HttpGetAsync(u)
 	end)
-	if ok and type(body) == "string" and #body > 50 then
+	if ok and type(body) == "string" then
 		return body
-	end
-	local req = (syn and syn.request)
-		or (http and http.request)
-		or http_request
-		or (fluxus and fluxus.request)
-		or request
-	if type(req) ~= "function" then
-		error("No HttpGet/request on this executor")
-	end
-	local res = req({ Url = u, Method = "GET" })
-	if type(res) == "string" then
-		return res
-	end
-	if type(res) == "table" then
-		return res.Body or res.body
 	end
 	return nil
 end
-if string.find(url, "YOURID", 1, true) then
-	error("Replace YOURID in the url with your Pastebin id")
+
+local function pasteIdFrom(u)
+	u = tostring(u or "")
+	u = string.gsub(u, "%s+", "")
+	return string.match(u, "pastebin%.com/raw%.php%?i=([%w]+)")
+		or string.match(u, "pastebin%.com/raw/([%w]+)")
+		or string.match(u, "pastebin%.com/dl/([%w]+)")
+		or string.match(u, "pastebin%.com/([%w]+)")
+		or string.match(u, "^([%w]+)$")
 end
-print("GameAnalysisAI: fetching " .. url)
-local src = httpGet(url)
-if type(src) ~= "string" or #src < 50 then
-	error("Fetch failed. Check the raw URL and that request() works.")
+
+if string.find(tostring(url), "YOURID", 1, true) then
+	error("Replace YOURID with your Pastebin id. Example: https://pastebin.com/raw/AbCd1234")
 end
-if string.sub(src, 1, 1) == "<" or string.find(src, "<html") or string.find(src, "<!DOCTYPE") then
-	error("Got a webpage, not Lua. Open pastebin.com/raw/YOURID in a browser and use that URL.")
+
+local candidates = {}
+local id = pasteIdFrom(url)
+if id then
+	candidates = {
+		"https://pastebin.com/raw/" .. id,
+		"https://pastebin.com/raw.php?i=" .. id,
+		"https://pastebin.com/dl/" .. id,
+	}
+else
+	candidates = { url }
 end
+
+print("GameAnalysisAI: fetching paste...")
+
+local src, used, lastPreview
+for i = 1, #candidates do
+	local u = candidates[i]
+	print("  try " .. u)
+	local body = tryGet(u)
+	if type(body) == "string" then
+		lastPreview = string.sub(string.gsub(body, "%s+", " "), 1, 80)
+		if looksLikeLua(body) then
+			src = body
+			used = u
+			break
+		end
+	end
+end
+
+if not src then
+	warn("Preview of what came back: " .. tostring(lastPreview))
+	error("Pastebin sent a webpage (block/captcha), not Lua. In a browser open the RAW link and confirm it starts with -- Game Analysis AI. If the browser shows Lua but this still fails, Pastebin is blocking the executor — paste GameAnalysisAI.lua itself instead.")
+end
+
+print("GameAnalysisAI: got Lua from " .. used .. " (" .. tostring(#src) .. " bytes)")
+
 local compile = loadstring or load
 if type(compile) ~= "function" then
 	error("This executor has no loadstring/load")
 end
+
 local fn, err = compile(src)
 if not fn then
-	error("Paste is not valid Lua (wrong URL or truncated): " .. tostring(err))
+	error("Paste is not valid Lua: " .. tostring(err))
 end
-print("GameAnalysisAI: running (" .. tostring(#src) .. " bytes)")
+
 fn()
