@@ -1,14 +1,54 @@
-local url = "https://pastebin.com/ppnH5Dw2"
-local src
-pcall(function()
-	src = game:HttpGet(url)
-end)
-if type(src) ~= "string" or src == "" then
-	local req = (syn and syn.request) or http_request or request
-	src = req({ Url = url, Method = "GET" }).Body
+-- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
+-- Replace YOURID with the paste id (the bit after pastebin.com/).
+local url = "https://pastebin.com/z4F3Cw5E"
+local function httpGet(u)
+	local ok, body = pcall(function()
+		return game:HttpGet(u)
+	end)
+	if ok and type(body) == "string" and #body > 50 then
+		return body
+	end
+	ok, body = pcall(function()
+		return game:HttpGetAsync(u)
+	end)
+	if ok and type(body) == "string" and #body > 50 then
+		return body
+	end
+	local req = (syn and syn.request)
+		or (http and http.request)
+		or http_request
+		or (fluxus and fluxus.request)
+		or request
+	if type(req) ~= "function" then
+		error("No HttpGet/request on this executor")
+	end
+	local res = req({ Url = u, Method = "GET" })
+	if type(res) == "string" then
+		return res
+	end
+	if type(res) == "table" then
+		return res.Body or res.body
+	end
+	return nil
 end
-assert(type(src) == "string" and #src > 1000, "Pastebin fetch failed")
-loadstring(src)()
-
-
-sk-proj-dVAULJvSezkx2eWYjgmr8HKVG5pmyfFwWHOxGPj7AUWEtFMFgGHqIR5Pfqk4g4mDdZWY1pPRZqT3BlbkFJcbj4ekmoAyDUH0-8LnH_Mo79_qDxm-qmTKxb3Ki0-
+if string.find(url, "YOURID", 1, true) then
+	error("Replace YOURID in the url with your Pastebin id")
+end
+print("GameAnalysisAI: fetching " .. url)
+local src = httpGet(url)
+if type(src) ~= "string" or #src < 50 then
+	error("Fetch failed. Check the raw URL and that request() works.")
+end
+if string.sub(src, 1, 1) == "<" or string.find(src, "<html") or string.find(src, "<!DOCTYPE") then
+	error("Got a webpage, not Lua. Open pastebin.com/raw/YOURID in a browser and use that URL.")
+end
+local compile = loadstring or load
+if type(compile) ~= "function" then
+	error("This executor has no loadstring/load")
+end
+local fn, err = compile(src)
+if not fn then
+	error("Paste is not valid Lua (wrong URL or truncated): " .. tostring(err))
+end
+print("GameAnalysisAI: running (" .. tostring(#src) .. " bytes)")
+fn()
