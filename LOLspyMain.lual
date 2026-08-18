@@ -1,7 +1,7 @@
 -- ONE script to Execute. Upload GameAnalysisAI.lua to Pastebin first.
 -- Put your paste id OR any raw URL on the next line (page URL is fine; this rewrites it).
 
-local url = "https://pastebin.com/tTrQYYaj"
+local url = "https://pastebin.com/Ttdse5sK"
 
 local UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -165,7 +165,11 @@ end
 
 local fn, err = compile(src)
 if not fn then
-	error("Paste is not valid Lua: " .. tostring(err))
+	err = tostring(err)
+	if string.find(err, "local registers", 1, true) or string.find(err, "exceeded limit 200", 1, true) then
+		error("Old paste. Re-upload the NEW GameAnalysisAI.lua from Documents, then run this loader again. (" .. err .. ")")
+	end
+	error("Paste is not valid Lua: " .. err)
 end
 
 fn()
